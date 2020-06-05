@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/spf13/viper"
 	"html/template"
 	"io"
 	"log"
@@ -298,6 +299,9 @@ func (r *Runner) Run() (<-chan int, error) {
 
 	// Add our custom values, overwriting any existing ones.
 	for k, v := range r.env {
+		if strings.Contains(v, "$") {
+			v = getInnerKeyValue(r.env, v)
+		}
 		newEnv[k] = v
 	}
 
@@ -340,6 +344,26 @@ func (r *Runner) Run() (<-chan int, error) {
 	r.child = child
 
 	return child.ExitCh(), nil
+}
+
+func getInnerKeyValue(v map[string]string, data string) string {
+	r := regexp.MustCompile(`.*\$\{([^\:}]+)\}|.*\$\{(.+):(.+)\}`)
+	results := r.FindAllStringSubmatch(data, 1)
+	if len(results) == 0 {
+		return ""
+	}
+	var innerKey string
+	if results[0][1] != ""  {
+		innerKey = results[0][1]
+	} else {
+		innerKey = results[0][2]
+	}
+
+	value := v[strings.ReplaceAll(strings.ToUpper(innerKey), ".", "_")]
+	if value == "" {
+		value = results[0][3]
+	}
+	return regexp.MustCompile(`\$\{.*\}`).ReplaceAllString(data, value)
 }
 
 func applyTemplate(contents, key string) (string, error) {
@@ -420,7 +444,18 @@ func (r *Runner) appendPrefixes(
 			env[key] = value
 		} else {
 			log.Printf("[DEBUG] (runner) setting %s=%q from %s", key, value, d)
-			env[key] = value
+			if key != "data" {
+				env[key] = value
+			} else {
+				v := viper.New()
+				v.SetConfigType("yaml")
+				v.ReadConfig(strings.NewReader(value))
+				keys := v.AllKeys()
+				for _, key :=  range keys {
+					raw := v.GetString(key)
+					env[strings.ToUpper(strings.ReplaceAll(key, ".", "_"))] = raw
+				}
+			}
 		}
 	}
 
