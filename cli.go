@@ -616,6 +616,11 @@ func (cli *CLI) ParseFlags(args []string) (*Config, []string, bool, bool, error)
 	// End deprecations
 	// TODO remove in 0.8.0
 
+	flags.Var((funcVar)(func(s string) error {
+		c.StartWith = config.String(s)
+		return nil
+	}), "start-with", "")
+
 	// If there was a parser error, stop
 	if err := flags.Parse(args); err != nil {
 		return nil, nil, false, false, err
@@ -812,6 +817,9 @@ Options:
       multiple prefixes are merged from left to right, with the right-most
       result taking precedence, including any values specified with -prefix
       (secrets overrides prefixes)
+
+  -start-with
+      Only environment variables with keys start with specified string will be passed to application
 
   -syslog
       Send the output to syslog instead of standard error and standard out. The

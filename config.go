@@ -84,6 +84,9 @@ type Config struct {
 
 	// Wait is the quiescence timers.
 	Wait *config.WaitConfig `mapstructure:"wait"`
+
+	// only env with start_with will be passing to child
+	StartWith *string `mapstructure:"start_with"`
 }
 
 // Copy returns a deep copy of the current configuration. This is useful because
@@ -135,6 +138,7 @@ func (c *Config) Copy() *Config {
 		o.Wait = c.Wait.Copy()
 	}
 
+	o.StartWith = c.StartWith
 	return &o
 }
 
@@ -211,7 +215,9 @@ func (c *Config) Merge(o *Config) *Config {
 	if o.Wait != nil {
 		r.Wait = r.Wait.Merge(o.Wait)
 	}
-
+	if o.StartWith != nil {
+		r.StartWith = o.StartWith
+	}
 	return r
 }
 

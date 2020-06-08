@@ -305,6 +305,17 @@ func (r *Runner) Run() (<-chan int, error) {
 		newEnv[k] = v
 	}
 
+	// only do 3 time for variable cross-ref
+	for i := 1;  i<=3; i++  {
+		for k, v := range newEnv {
+			if strings.Contains(v, "$") {
+				log.Printf("[INFO] re-evaluate for cross-ref -> %s:%s\r\n", k, v)
+				v = getInnerKeyValue(newEnv, v)
+			}
+			newEnv[k] = v
+		}
+	}
+
 	filteredEnv := r.applyConfigEnv(newEnv)
 
 	// Prepare the final environment. Note that it's CRUCIAL for us to
@@ -312,8 +323,24 @@ func (r *Runner) Run() (<-chan int, error) {
 	// how the child process class decides whether to pull in the parent's
 	// environment or not, and we control that via -pristine.
 	cmdEnv := make([]string, 0)
+	var includes []string
+	if r.config.StartWith != nil {
+		includes = strings.Split(*r.config.StartWith, ",")
+	}
+
 	for k, v := range filteredEnv {
-		cmdEnv = append(cmdEnv, fmt.Sprintf("%s=%s", k, v))
+		hit := true
+		for _, start := range includes {
+			hit = false  // IF start-with specified
+			if strings.HasPrefix(k, start) {
+				hit = true
+				break
+			}
+		}
+		if hit {
+			cmdEnv = append(cmdEnv, fmt.Sprintf("%s=%s", k, v))
+			log.Printf("[INFO] Apply ENV  %s=%s\r\n", k,v)
+		}
 	}
 
 	p := shellwords.NewParser()
@@ -363,7 +390,7 @@ func getInnerKeyValue(v map[string]string, data string) string {
 	if value == "" {
 		value = results[0][3]
 	}
-	return regexp.MustCompile(`\$\{.*\}`).ReplaceAllString(data, value)
+	return regexp.MustCompile(`\$\{[^\{]*\}`).ReplaceAllString(data, value)
 }
 
 func applyTemplate(contents, key string) (string, error) {
