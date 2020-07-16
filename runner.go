@@ -20,7 +20,7 @@ import (
 	"github.com/hashicorp/consul-template/config"
 	dep "github.com/hashicorp/consul-template/dependency"
 	"github.com/hashicorp/consul-template/watch"
-	shellwords "github.com/mattn/go-shellwords"
+	"github.com/mattn/go-shellwords"
 	"github.com/pkg/errors"
 )
 
@@ -347,6 +347,18 @@ func (r *Runner) Run() (<-chan int, error) {
 	args, err := p.Parse(config.StringVal(r.config.Exec.Command))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed parsing command")
+	}
+
+	// change env in args {{ENV}}, IE: java -c --jar={{ENV_NEEDS_CHANGE}}
+	for i, arg := range args[1:] {
+		r := regexp.MustCompile(`\{\{([^\:\{\}]+)\}\}`)
+		results := r.FindAllStringSubmatch(arg, -1)
+		for _, replacing := range results {
+			if replacing[1] != ""  {
+				arg = strings.ReplaceAll(arg, replacing[0], env[replacing[1]])
+			}
+		}
+		args[i+1] = arg
 	}
 
 	child, err := child.New(&child.NewInput{
@@ -831,7 +843,7 @@ func (r *Runner) applyConfigEnv(env map[string]string) map[string]string {
 	}
 
 	keys := make(map[string]bool, len(env))
-	for k, _ := range env {
+	for k := range env {
 		keys[k] = true
 	}
 
@@ -849,7 +861,7 @@ func (r *Runner) applyConfigEnv(env map[string]string) map[string]string {
 	// Filter to envvars that match the whitelist
 	if n := len(r.config.Exec.Env.Whitelist); n > 0 {
 		include := make(map[string]bool, n)
-		for k, _ := range keys {
+		for k := range keys {
 			if anyGlobMatch(k, r.config.Exec.Env.Whitelist) {
 				include[k] = true
 			}
@@ -860,7 +872,7 @@ func (r *Runner) applyConfigEnv(env map[string]string) map[string]string {
 	// Remove any env vars that match the blacklist
 	// Blacklist takes precedence over whitelist
 	if len(r.config.Exec.Env.Blacklist) > 0 {
-		for k, _ := range keys {
+		for k := range keys {
 			if anyGlobMatch(k, r.config.Exec.Env.Blacklist) {
 				delete(keys, k)
 			}
@@ -868,7 +880,7 @@ func (r *Runner) applyConfigEnv(env map[string]string) map[string]string {
 	}
 
 	// Filter env to allowed keys
-	for k, _ := range env {
+	for k := range env {
 		if _, ok := keys[k]; !ok {
 			delete(env, k)
 		}
