@@ -386,23 +386,29 @@ func (r *Runner) Run() (<-chan int, error) {
 }
 
 func getInnerKeyValue(v map[string]string, data string) string {
-	r := regexp.MustCompile(`.*\$\{([^\:}]+)\}|.*\$\{(.+):(.+)\}`)
-	results := r.FindAllStringSubmatch(data, 1)
+	r := regexp.MustCompile(`\$\{([^\:\}\{]+)\}|\$\{([^\:\}\{]+):([^\:\}\{]+)\}`)
+	results := r.FindAllStringSubmatch(data, -1)
 	if len(results) == 0 {
 		return ""
 	}
-	var innerKey string
-	if results[0][1] != ""  {
-		innerKey = results[0][1]
-	} else {
-		innerKey = results[0][2]
+
+	var result = data
+	for i, _ :=  range results {
+		var innerKey string
+		if results[i][1] != ""  {
+			innerKey = results[i][1]
+		} else {
+			innerKey = results[i][2]
+		}
+
+		value := v[strings.ReplaceAll(strings.ToUpper(innerKey), ".", "_")]
+		if value == "" {
+			value = results[i][3]
+		}
+		result = strings.ReplaceAll( result, results[i][0], value)
 	}
 
-	value := v[strings.ReplaceAll(strings.ToUpper(innerKey), ".", "_")]
-	if value == "" {
-		value = results[0][3]
-	}
-	return regexp.MustCompile(`\$\{[^\{]*\}`).ReplaceAllString(data, value)
+	return result
 }
 
 func applyTemplate(contents, key string) (string, error) {
